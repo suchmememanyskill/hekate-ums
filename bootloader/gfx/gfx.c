@@ -274,6 +274,48 @@ void gfx_puts(const char *s)
 		gfx_putc(*s);
 }
 
+static inline int is_valid_num(char c) {
+	return (c >= '0' && c <= '9');
+}
+
+static inline int is_valid_hex(char c) {
+	char r = c | 0x20;
+	return (is_valid_num(r) || (r >= 'a' && r <= 'f'));
+}
+
+void gfx_puts_with_hex_color_code(const char *s)
+{
+	if (!s || !gfx_con_init_done || gfx_con.mute)
+		return;
+
+	u32 current_color = gfx_con.fgcol;
+	u8 changed_color = 0;
+
+	for (; *s; s++) {
+		if (*s == '#'){
+			if (!changed_color && is_valid_hex(*(s + 1))){
+				changed_color = 1;
+				gfx_con.fgcol = 0;
+				for (int i = 0; i < 6; i++) {
+					char* in = s + 1 + i;
+					gfx_con.fgcol = gfx_con.fgcol * 16 + (*in & 0x0F) + (*in >= 'A' ? 9 : 0);
+				}
+				s += 6;
+			}
+			else {
+				changed_color = 0;
+				gfx_con.fgcol = current_color;
+			}
+
+			continue;
+		}
+
+		gfx_putc(*s);
+	}
+		
+	gfx_con.fgcol = current_color;
+}
+
 static void _gfx_putn(u32 v, int base, char fill, int fcnt)
 {
 	static const char digits[] = "0123456789ABCDEF";
@@ -373,6 +415,9 @@ void gfx_printf(const char *fmt, ...)
 				break;
 			case 's':
 				gfx_puts(va_arg(ap, char *));
+				break;
+			case 'S':
+				gfx_puts_with_hex_color_code(va_arg(ap, char *));
 				break;
 			case 'd':
 				_gfx_putn(va_arg(ap, u32), 10, fill, fcnt);

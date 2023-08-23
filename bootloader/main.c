@@ -1432,42 +1432,315 @@ static void _about()
 	btn_wait();
 }
 
-ment_t ment_cinfo[] = {
-	MDEF_BACK(),
-	MDEF_CHGLINE(),
-	MDEF_CAPTION("---- SoC Info ----", TXT_CLR_CYAN_L),
-	MDEF_HANDLER("Fuses", print_fuseinfo),
-	MDEF_CHGLINE(),
-	MDEF_CAPTION("-- Storage Info --", TXT_CLR_CYAN_L),
-	MDEF_HANDLER("eMMC",    print_mmc_info),
-	MDEF_HANDLER("SD Card", print_sdcard_info),
-	MDEF_CHGLINE(),
-	MDEF_CAPTION("------ Misc ------", TXT_CLR_CYAN_L),
-	MDEF_HANDLER("Battery", print_battery_info),
-	MDEF_END()
-};
-
-menu_t menu_cinfo = { ment_cinfo, "Console Info", 0, 0 };
-
-ment_t ment_tools[] = {
-	MDEF_BACK(),
-	MDEF_CHGLINE(),
-	MDEF_CAPTION("-------- Other -------", TXT_CLR_WARNING),
-	MDEF_HANDLER("AutoRCM", menu_autorcm),
-	MDEF_END()
-};
-
-menu_t menu_tools = { ment_tools, "Tools", 0, 0 };
-
 power_state_t STATE_POWER_OFF           = POWER_OFF_RESET;
 power_state_t STATE_REBOOT_RCM          = REBOOT_RCM;
 power_state_t STATE_REBOOT_BYPASS_FUSES = REBOOT_BYPASS_FUSES;
 
+
+static void manual_system_maintenance(bool refresh){
+	// Pass go and collect $200
+}
+
+static void usb_gadget_set_text(void *lbl, const char *text) {
+	gfx_printf("%S\n", text);
+}
+
+void do_ums(usb_ctxt_t* usbs, char* type){
+	gfx_clear_grey(0x1B);
+	gfx_con_setpos(0,0);
+	char* extra = (usbs->ro) ? " (Read-Only)" : "";
+	gfx_printf("Storage: %s%s\n\n", type, extra);
+	gfx_puts_with_hex_color_code("#FF8000 USB Mass Storage#\n");
+
+	display_backlight_brightness(20, 1000); // Dim Backlight
+	usb_device_gadget_ums(usbs);
+	display_backlight_brightness(h_cfg.backlight, 1000); // Restore Backlight
+
+	gfx_printf("\nDone! Press any key to exit.");
+	btn_wait();
+}
+
+void do_error(char *error, char* type){
+	gfx_clear_grey(0x1B);
+	gfx_con_setpos(0,0);
+	gfx_printf("Storage: %s\n\n", type);
+
+	gfx_puts_with_hex_color_code("#FF8000 USB Mass Storage#\n");
+	gfx_printf("%S", error);
+
+	gfx_printf("\n\nPress any key to exit.");
+	btn_wait();
+}
+
+void _ums_sd(u32 ro) {
+	usb_ctxt_t usbs;
+	usbs.type = MMC_SD;
+	usbs.partition = 0;
+	usbs.offset = 0;
+	usbs.sectors = 0;
+	usbs.ro = ro;
+	usbs.system_maintenance = &manual_system_maintenance;
+	usbs.set_text = &usb_gadget_set_text;
+
+	if (!sd_mount()){
+		do_error("#FFFF00 Error mounting SD Card!#", "SD Card");
+	}
+	else {
+		sd_unmount();
+		do_ums(&usbs, "SD Card");
+	}
+}
+
+void ums_sd(){
+	_ums_sd(0);
+}
+
+void ums_sd_ro(){
+	_ums_sd(1);
+}
+
+void _ums_emmc_boot0(u32 ro){
+	usb_ctxt_t usbs;
+	usbs.type = MMC_EMMC;
+	usbs.partition = EMMC_BOOT0 + 1;
+	usbs.offset = 0;
+	usbs.sectors = 0x2000;
+	usbs.ro = ro;
+	usbs.system_maintenance = &manual_system_maintenance;
+	usbs.set_text = &usb_gadget_set_text;
+	do_ums(&usbs, "EMMC Boot0");
+}
+
+void ums_emmc_boot0(){
+	_ums_emmc_boot0(0);
+}
+
+void ums_emmc_boot0_ro(){
+	_ums_emmc_boot0(1);
+}
+
+void _ums_emmc_boot1(u32 ro){
+	usb_ctxt_t usbs;
+	usbs.type = MMC_EMMC;
+	usbs.partition = EMMC_BOOT1 + 1;
+	usbs.offset = 0;
+	usbs.sectors = 0x2000;
+	usbs.ro = ro;
+	usbs.system_maintenance = &manual_system_maintenance;
+	usbs.set_text = &usb_gadget_set_text;
+	do_ums(&usbs, "EMMC Boot1");
+}
+
+void ums_emmc_boot1(){
+	_ums_emmc_boot1(0);
+}
+
+void ums_emmc_boot1_ro(){
+	_ums_emmc_boot1(1);
+}
+
+void _ums_emmc_gpp(u32 ro){
+	usb_ctxt_t usbs;
+	usbs.type = MMC_EMMC;
+	usbs.partition = EMMC_GPP + 1;
+	usbs.offset = 0;
+	usbs.sectors = 0;
+	usbs.ro = ro;
+	usbs.system_maintenance = &manual_system_maintenance;
+	usbs.set_text = &usb_gadget_set_text;
+	do_ums(&usbs, "EMMC GPP");
+}
+
+void ums_emmc_gpp(){
+	_ums_emmc_gpp(0);
+}
+
+void ums_emmc_gpp_ro(){
+	_ums_emmc_gpp(1);
+}
+
+void _ums_emummc_boot0(u32 ro){
+	usb_ctxt_t usbs;
+
+	char* error = NULL;
+	if (!sd_mount()){
+		error = "#FFFF00 Error mounting SD Card!#";
+	}
+	else
+	{
+		emummc_load_cfg();
+
+		error = "#FFFF00 No emuMMC found active!#";
+		if (emu_cfg.enabled)
+		{
+			error = "#FFFF00 Active emuMMC is not partition based!#";
+			if (emu_cfg.sector)
+			{
+				error = NULL;
+				usbs.offset = emu_cfg.sector;
+			}
+		}
+
+		if (emu_cfg.path)
+			free(emu_cfg.path);
+		if (emu_cfg.nintendo_path)
+			free(emu_cfg.nintendo_path);
+	}
+	sd_unmount();
+
+	if (error != NULL){
+		do_error(error, "EMUMMC Boot0");
+	}
+	else
+	{
+		usbs.type = MMC_SD;
+		usbs.partition = EMMC_BOOT0 + 1;
+		usbs.sectors = 0x2000;
+		usbs.ro = ro;
+		usbs.system_maintenance = &manual_system_maintenance;
+		usbs.set_text = &usb_gadget_set_text;
+		do_ums(&usbs, "EMUMMC Boot0");
+	}
+}
+
+void ums_emummc_boot0(){
+	_ums_emummc_boot0(0);
+}
+
+void ums_emummc_boot0_ro(){
+	_ums_emummc_boot0(1);
+}
+
+void _ums_emummc_boot1(u32 ro){
+	usb_ctxt_t usbs;
+
+	char* error = NULL;
+	if (!sd_mount()){
+		error = "#FFFF00 Error mounting SD Card!#";
+	}
+	else
+	{
+		emummc_load_cfg();
+
+		error = "#FFFF00 No emuMMC found active!#";
+		if (emu_cfg.enabled)
+		{
+			error = "#FFFF00 Active emuMMC is not partition based!#";
+			if (emu_cfg.sector)
+			{
+				error = NULL;
+				usbs.offset = emu_cfg.sector;
+			}
+		}
+
+		if (emu_cfg.path)
+			free(emu_cfg.path);
+		if (emu_cfg.nintendo_path)
+			free(emu_cfg.nintendo_path);
+	}
+	sd_unmount();
+
+	if (error != NULL){
+		do_error(error, "EMUMMC Boot1");
+	}
+	else
+	{
+		usbs.type = MMC_SD;
+		usbs.partition = EMMC_BOOT1 + 1;
+		usbs.sectors = 0x2000;
+		usbs.ro = ro;
+		usbs.system_maintenance = &manual_system_maintenance;
+		usbs.set_text = &usb_gadget_set_text;
+		do_ums(&usbs, "EMUMMC Boot1");
+	}
+}
+
+void ums_emummc_boot1(){
+	_ums_emummc_boot1(0);
+}
+
+void ums_emummc_boot1_ro(){
+	_ums_emummc_boot1(1);
+}
+
+void _ums_emummc_gpp(u32 ro){
+	usb_ctxt_t usbs;
+
+	char* error = NULL;
+	if (!sd_mount()){
+		error = "#FFFF00 Error mounting SD Card!#";
+	}
+	else
+	{
+		emummc_load_cfg();
+
+		error = "#FFFF00 No emuMMC found active!#";
+		if (emu_cfg.enabled)
+		{
+			error = "#FFFF00 Active emuMMC is not partition based!#";
+			if (emu_cfg.sector)
+			{
+				error = "#FFFF00 Error mounting SD Card!#";
+				usbs.offset = emu_cfg.sector + 0x4000;
+
+				u8 *gpt = malloc(512);
+				if (sdmmc_storage_read(&sd_storage, usbs.offset + 1, 1, gpt))
+				{
+					if (!memcmp(gpt, "EFI PART", 8))
+					{
+						error = NULL;
+						usbs.sectors = *(u32 *)(gpt + 0x20) + 1; // Backup LBA + 1.
+					}
+				}
+			}
+		}
+
+		if (emu_cfg.path)
+			free(emu_cfg.path);
+		if (emu_cfg.nintendo_path)
+			free(emu_cfg.nintendo_path);
+	}
+	sd_unmount();
+
+	if (error != NULL){
+		do_error(error, "EMUMMC GPP");
+	}
+	else
+	{
+		usbs.type = MMC_SD;
+		usbs.partition = EMMC_GPP + 1;
+		usbs.ro = ro;
+		usbs.system_maintenance = &manual_system_maintenance;
+		usbs.set_text = &usb_gadget_set_text;
+		do_ums(&usbs, "EMUMMC GPP");
+	}
+}
+
+void ums_emummc_gpp(){
+	_ums_emummc_gpp(0);
+}
+
+void ums_emummc_gpp_ro(){
+	_ums_emummc_gpp(1);
+}
+
 ment_t ment_top[] = {
-	MDEF_HANDLER("Launch", _launch_config),
+	MDEF_HANDLER("UMS SD Card", ums_sd),
+	MDEF_HANDLER("UMS SD Card (Read-Only)", ums_sd_ro),
 	MDEF_CAPTION("---------------", TXT_CLR_GREY_DM),
-	MDEF_MENU("Tools",        &menu_tools),
-	MDEF_MENU("Console info", &menu_cinfo),
+	MDEF_HANDLER("UMS EMMC Boot0", ums_emmc_boot0),
+	MDEF_HANDLER("UMS EMMC Boot0 (Read-Only)", ums_emmc_boot0_ro),
+	MDEF_HANDLER("UMS EMMC Boot1", ums_emmc_boot1),
+	MDEF_HANDLER("UMS EMMC Boot1 (Read-Only)", ums_emmc_boot1_ro),
+	MDEF_HANDLER("UMS EMMC GPP", ums_emmc_gpp),
+	MDEF_HANDLER("UMS EMMC GPP (Read-Only)", ums_emmc_gpp_ro),
+	MDEF_CAPTION("---------------", TXT_CLR_GREY_DM),
+	MDEF_HANDLER("UMS EMUMMC Boot0", ums_emummc_boot0),
+	MDEF_HANDLER("UMS EMUMMC Boot0 (Read-Only)", ums_emummc_boot0_ro),
+	MDEF_HANDLER("UMS EMUMMC Boot1", ums_emummc_boot1),
+	MDEF_HANDLER("UMS EMUMMC Boot1 (Read-Only)", ums_emummc_boot1_ro),
+	MDEF_HANDLER("UMS EMUMMC GPP", ums_emummc_gpp),
+	MDEF_HANDLER("UMS EMUMMC GPP (Read-Only)", ums_emummc_gpp_ro),
 	MDEF_CAPTION("---------------", TXT_CLR_GREY_DM),
 	MDEF_HANDLER("Reload", _ipl_reload),
 	MDEF_HANDLER_EX("Reboot (OFW)", &STATE_REBOOT_BYPASS_FUSES, power_set_state_ex),
@@ -1513,33 +1786,13 @@ void ipl_main()
 	// Mount SD Card.
 	h_cfg.errors |= !sd_mount() ? ERR_SD_BOOT_EN : 0;
 
-	// Check if watchdog was fired previously.
-	if (watchdog_fired())
-		goto skip_lp0_minerva_config;
-
-	// Enable watchdog protection to avoid SD corruption based hanging in LP0/Minerva config.
-	watchdog_start(5000000 / 2, TIMER_FIQENABL_EN); // 5 seconds.
-
-	// Save sdram lp0 config.
-	void *sdram_params = h_cfg.t210b01 ? sdram_get_params_t210b01() : sdram_get_params_patched();
-	if (!ianos_loader("bootloader/sys/libsys_lp0.bso", DRAM_LIB, sdram_params))
-		h_cfg.errors |= ERR_LIBSYS_LP0;
-
-	// Train DRAM and switch to max frequency.
-	if (minerva_init()) //!TODO: Add Tegra210B01 support to minerva.
-		h_cfg.errors |= ERR_LIBSYS_MTC;
-
-	// Disable watchdog protection.
-	watchdog_end();
-
-skip_lp0_minerva_config:
 	// Initialize display window, backlight and gfx console.
 	u32 *fb = display_init_framebuffer_pitch();
 	gfx_init_ctxt(fb, 720, 1280, 720);
 	gfx_con_init();
 
 	display_backlight_pwm_init();
-	//display_backlight_brightness(h_cfg.backlight, 1000);
+	display_backlight_brightness(h_cfg.backlight, 1000);
 
 	// Overclock BPMP.
 	bpmp_clk_rate_set(h_cfg.t210b01 ? BPMP_CLK_DEFAULT_BOOST : BPMP_CLK_LOWER_BOOST);
@@ -1550,13 +1803,6 @@ skip_lp0_minerva_config:
 
 	// Show exceptions, HOS errors, library errors and L4T kernel panics.
 	_show_errors();
-
-	// Load saved configuration and auto boot if enabled.
-	if (!(h_cfg.errors & ERR_SD_BOOT_EN))
-		_auto_launch();
-
-	// Failed to launch Nyx, unmount SD Card.
-	sd_end();
 
 	// Set ram to a freq that doesn't need periodic training.
 	minerva_change_freq(FREQ_800);

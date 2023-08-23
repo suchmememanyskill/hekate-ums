@@ -34,16 +34,16 @@ OBJS += $(addprefix $(BUILDDIR)/$(TARGET)/, \
 	bpmp.o ccplex.o clock.o di.o i2c.o irq.o timer.o \
 	mc.o sdram.o minerva.o \
 	gpio.o pinmux.o pmc.o se.o smmu.o tsec.o uart.o \
-	fuse.o kfuse.o \
+	fuse.o kfuse.o usb_gadget_ums.o \
 	sdmmc.o sdmmc_driver.o emmc.o sd.o emummc.o \
 	bq24193.o max17050.o max7762x.o max77620-rtc.o \
-	hw_init.o \
+	hw_init.o xusbd.o usbd.o usb_gadget_hid.o usb_descriptors.o \
 )
 
 # Utilities.
 OBJS += $(addprefix $(BUILDDIR)/$(TARGET)/, \
 	btn.o dirlist.o ianos.o util.o \
-	config.o ini.o \
+	config.o ini.o sprintf.o \
 )
 
 # Horizon.
