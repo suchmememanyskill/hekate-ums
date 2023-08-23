@@ -38,6 +38,7 @@ void set_default_configuration()
 	h_cfg.autonogc      = 1;
 	h_cfg.updater2p     = 0;
 	h_cfg.bootprotect   = 0;
+	h_cfg.minerva_init 	= 0;
 
 	h_cfg.errors = 0;
 	h_cfg.eks = NULL;

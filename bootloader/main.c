@@ -1448,6 +1448,9 @@ static void usb_gadget_set_text(void *lbl, const char *text) {
 void do_ums(usb_ctxt_t* usbs, char* type){
 	gfx_clear_grey(0x1B);
 	gfx_con_setpos(0,0);
+
+	gfx_puts(h_cfg.minerva_init ? "Minerva initialised\n" : "Minerva not initialised\n");
+
 	char* extra = (usbs->ro) ? " (Read-Only)" : "";
 	gfx_printf("Storage: %s%s\n\n", type, extra);
 	gfx_puts_with_hex_color_code("#FF8000 USB Mass Storage#\n");
@@ -1785,6 +1788,29 @@ void ipl_main()
 
 	// Mount SD Card.
 	h_cfg.errors |= !sd_mount() ? ERR_SD_BOOT_EN : 0;
+
+	// Check if watchdog was fired previously.
+	if (watchdog_fired())
+		goto skip_lp0_minerva_config;
+
+	// Enable watchdog protection to avoid SD corruption based hanging in LP0/Minerva config.
+	watchdog_start(5000000 / 2, TIMER_FIQENABL_EN); // 5 seconds.
+
+	// Save sdram lp0 config.
+	void *sdram_params = h_cfg.t210b01 ? sdram_get_params_t210b01() : sdram_get_params_patched();
+	if (!ianos_loader("bootloader/sys/libsys_lp0.bso", DRAM_LIB, sdram_params))
+		h_cfg.errors |= ERR_LIBSYS_LP0;
+
+	// Train DRAM and switch to max frequency.
+	if (minerva_init()) //!TODO: Add Tegra210B01 support to minerva.
+		h_cfg.errors |= ERR_LIBSYS_MTC;
+	else 
+		h_cfg.minerva_init = 1;
+
+	// Disable watchdog protection.
+	watchdog_end();
+
+skip_lp0_minerva_config:
 
 	// Initialize display window, backlight and gfx console.
 	u32 *fb = display_init_framebuffer_pitch();
