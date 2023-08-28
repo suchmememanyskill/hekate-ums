@@ -1450,6 +1450,7 @@ void do_ums(usb_ctxt_t* usbs, char* type){
 	gfx_con_setpos(0,0);
 
 	gfx_puts(h_cfg.minerva_init ? "Minerva initialised\n" : "Minerva not initialised\n");
+	gfx_puts((hw_get_chip_id() == GP_HIDREV_MAJOR_T210) ? "Using USB driver\n" : "Using xUSB driver\n");
 
 	char* extra = (usbs->ro) ? " (Read-Only)" : "";
 	gfx_printf("Storage: %s%s\n\n", type, extra);
@@ -1727,23 +1728,45 @@ void ums_emummc_gpp_ro(){
 	_ums_emummc_gpp(1);
 }
 
-ment_t ment_top[] = {
+ment_t ment_sd[] = {
+	MDEF_BACK(),
 	MDEF_HANDLER("UMS SD Card", ums_sd),
 	MDEF_HANDLER("UMS SD Card (Read-Only)", ums_sd_ro),
-	MDEF_CAPTION("---------------", TXT_CLR_GREY_DM),
+	MDEF_END(),
+};
+
+menu_t menu_sd = { ment_sd, "SD Card", 0, 0 };
+
+ment_t ment_emmc[] = {
+	MDEF_BACK(),
 	MDEF_HANDLER("UMS EMMC Boot0", ums_emmc_boot0),
 	MDEF_HANDLER("UMS EMMC Boot0 (Read-Only)", ums_emmc_boot0_ro),
 	MDEF_HANDLER("UMS EMMC Boot1", ums_emmc_boot1),
 	MDEF_HANDLER("UMS EMMC Boot1 (Read-Only)", ums_emmc_boot1_ro),
 	MDEF_HANDLER("UMS EMMC GPP", ums_emmc_gpp),
 	MDEF_HANDLER("UMS EMMC GPP (Read-Only)", ums_emmc_gpp_ro),
-	MDEF_CAPTION("---------------", TXT_CLR_GREY_DM),
-	MDEF_HANDLER("UMS EMUMMC Boot0", ums_emummc_boot0),
-	MDEF_HANDLER("UMS EMUMMC Boot0 (Read-Only)", ums_emummc_boot0_ro),
-	MDEF_HANDLER("UMS EMUMMC Boot1", ums_emummc_boot1),
-	MDEF_HANDLER("UMS EMUMMC Boot1 (Read-Only)", ums_emummc_boot1_ro),
-	MDEF_HANDLER("UMS EMUMMC GPP", ums_emummc_gpp),
-	MDEF_HANDLER("UMS EMUMMC GPP (Read-Only)", ums_emummc_gpp_ro),
+	MDEF_END(),
+};
+
+menu_t menu_emmc = { ment_emmc, "EMMC", 0, 0 };
+
+ment_t ment_emummc[] = {
+	MDEF_BACK(),
+	MDEF_HANDLER("UMS EMMC Boot0", ums_emmc_boot0),
+	MDEF_HANDLER("UMS EMMC Boot0 (Read-Only)", ums_emmc_boot0_ro),
+	MDEF_HANDLER("UMS EMMC Boot1", ums_emmc_boot1),
+	MDEF_HANDLER("UMS EMMC Boot1 (Read-Only)", ums_emmc_boot1_ro),
+	MDEF_HANDLER("UMS EMMC GPP", ums_emmc_gpp),
+	MDEF_HANDLER("UMS EMMC GPP (Read-Only)", ums_emmc_gpp_ro),
+	MDEF_END(),
+};
+
+menu_t menu_emummc = { ment_emummc, "EMUMMC", 0, 0 };
+
+ment_t ment_top[] = {
+	MDEF_MENU("SD Card", &menu_sd),
+	MDEF_MENU("EMMC", &menu_emmc),
+	MDEF_MENU("EMUMMC", &menu_emummc),
 	MDEF_CAPTION("---------------", TXT_CLR_GREY_DM),
 	MDEF_HANDLER("Reload", _ipl_reload),
 	MDEF_HANDLER_EX("Reboot (OFW)", &STATE_REBOOT_BYPASS_FUSES, power_set_state_ex),
